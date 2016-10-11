@@ -23,21 +23,24 @@
 #
 
 TIMESTAMP="20160815"
-PACKAGE="open_gapps-arm-6.0-pico-$TIMESTAMP.zip"
+ANDROID_VER="6.0"
+PACKAGE=""
 
 SHOW_HELP=false
 ADB_ADDRESS=""
+ARCHITECTURE=""
 
 # ------------------------------------------------
 # Helping functions
 # ------------------------------------------------
-
+# Aldulain: Updated help function with Igor Kalkov's updates for RTAndroid 7.0
 show_help()
 {
 cat << EOF
 USAGE:
-  $0 [-h] -a IP
+  $0 [-h] -a ARCH -i IP
 OPTIONS:
+  -a  Device architecture: x86, x86_64, arm, arm64
   -h  Show help
   -a  IP address for ADB
 EOF
@@ -59,7 +62,9 @@ wait_for_adb()
     while true; do
         sleep 1
         adb kill-server > /dev/null
+        sleep 1
         adb connect $ADB_ADDRESS > /dev/null
+        sleep 1
         if is_booted; then
             break
         fi
@@ -94,7 +99,7 @@ prepare_gapps()
     if [ ! -d "gapps/pkg" ]; then
         echo " * Downloading OpenGApps package..."
         echo ""
-        wget https://github.com/opengapps/arm/releases/download/$TIMESTAMP/$PACKAGE -O gapps/$PACKAGE
+        wget https://github.com/opengapps/$ARCHITECTURE/releases/download/$TIMESTAMP/$PACKAGE -O gapps/$PACKAGE
     fi
 
     if [ ! -f "gapps/$PACKAGE" ]; then
@@ -119,7 +124,9 @@ create_partition()
     echo " * Extracting supplied packages..."
     rm -rf gapps/tmp > /dev/null 2>&1
     mkdir -p gapps/tmp
-    find . -name "*.tar.xz" -exec tar -xf {} -C gapps/tmp/ \;
+    # Aldulain: modified to include different compression formats (last DL of gapps had tar.lz)
+    # Compression libraries must already be on the system. Will corrupt android image if not installed.
+    find . -name "*.tar.[g|l|x]z" -exec tar -xf {} -C gapps/tmp/ \;
 
     echo " * Creating local system partition..."
     rm -rf gapps/sys > /dev/null 2>&1
@@ -163,9 +170,11 @@ install_package()
 # ------------------------------------------------
 
 # save the passed options
-while getopts ":a:h" flag; do
+# Aldulain: Included Igor Kalkov's updated args for RTAndroid 7.0
+while getopts ":i:a:h" flag; do
 case $flag in
-    "a") ADB_ADDRESS="$OPTARG" ;;
+    "i") ADB_ADDRESS="$OPTARG" ;;
+    "a") ARCHITECTURE="$OPTARG" ;;
     "h") SHOW_HELP=true ;;
     *)
          echo ""
@@ -176,13 +185,25 @@ case $flag in
 esac
 done
 
+# Aldulain: Included Igor Kalkov's updated architecture check
+if [ "$ARCHITECTURE" != "x86" -a "$ARCHITECTURE" != "x86_64" -a "$ARCHITECTURE" != "arm" -a "$ARCHITECTURE" != "arm64" ]; then
+    echo "ERR: $ARCHITECTURE is not a valid architecture!";
+    show_help
+    exit 1
+fi
+
 if [[ "$SHOW_HELP" = true ]]; then
     show_help
     exit 1
 fi
 
+# Aldulain: Updated the package var to include updated and new variables
+PACKAGE="open_gapps-$ARCHITECTURE-$ANDROID_VER-pico-$TIMESTAMP.zip"
+
 echo "GApps installation script for RPi"
 echo "Used package: $PACKAGE"
+# Aldulain: added output of android version
+echo "Android Version: $ANDROID_VER"
 echo "ADB IP address: $ADB_ADDRESS"
 echo ""
 
